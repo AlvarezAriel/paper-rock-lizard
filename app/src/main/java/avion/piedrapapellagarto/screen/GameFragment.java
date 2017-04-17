@@ -1,14 +1,4 @@
-//
-// Copyright 2016 by Grindr LLC,
-// All rights reserved.
-//
-// This software is confidential and proprietary information of
-// Grindr LLC ("Confidential Information").
-// You shall not disclose such Confidential Information and shall use
-// it only in accordance with the terms of the license agreement
-// you entered into with Grindr LLC.
-//
-package avion.piedrapapellagarto;
+package avion.piedrapapellagarto.screen;
 
 import android.os.Bundle;
 import android.support.annotation.Nullable;
@@ -20,6 +10,7 @@ import android.widget.ImageView;
 
 import java.util.Random;
 
+import avion.piedrapapellagarto.R;
 import avion.piedrapapellagarto.model.GameChoice;
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -44,8 +35,7 @@ public class GameFragment extends Fragment {
     @Nullable
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.fragment_game, container, false);
-        return view;
+        return inflater.inflate(R.layout.fragment_game, container, false);
     }
 
     @Override

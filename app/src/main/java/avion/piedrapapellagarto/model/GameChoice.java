@@ -1,13 +1,3 @@
-//
-// Copyright 2016 by Grindr LLC,
-// All rights reserved.
-//
-// This software is confidential and proprietary information of
-// Grindr LLC ("Confidential Information").
-// You shall not disclose such Confidential Information and shall use
-// it only in accordance with the terms of the license agreement
-// you entered into with Grindr LLC.
-//
 package avion.piedrapapellagarto.model;
 
 import java.util.ArrayList;
@@ -27,7 +17,6 @@ public class GameChoice {
     public static final List<GameChoice> ALL_CHOICES;
 
     static {
-
         ROCK = new GameChoice(R.drawable.rock);
         PAPER = new GameChoice(R.drawable.paper);
         SCISSORS = new GameChoice(R.drawable.scissors);
@@ -48,21 +37,17 @@ public class GameChoice {
 
     private List<GameChoice> strongerAgainst = new ArrayList<>();
 
-    public GameChoice(int drawable) {
+    private GameChoice(int drawable) {
 
         this.drawable = drawable;
     }
 
+    private void setStrongerAgainst(GameChoice ...strongerAgainst) {
+        this.strongerAgainst.addAll(Arrays.asList(strongerAgainst));
+    }
+
     public List<GameChoice> getStrongerAgainst() {
         return strongerAgainst;
-    }
-
-    public void setStrongerAgainst(List<GameChoice> strongerAgainst) {
-        this.strongerAgainst = strongerAgainst;
-    }
-
-    void setStrongerAgainst(GameChoice ...strongerAgainst) {
-        this.strongerAgainst.addAll(Arrays.asList(strongerAgainst));
     }
 
 }

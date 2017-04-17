@@ -3,6 +3,8 @@ package avion.piedrapapellagarto;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
+import avion.piedrapapellagarto.screen.GameFragment;
+
 public class MainActivity extends AppCompatActivity {
 
     @Override
