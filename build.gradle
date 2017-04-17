@@ -3,9 +3,13 @@
 buildscript {
     repositories {
         jcenter()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.2.3'
+        classpath 'com.android.tools.build:gradle:2.3.0'
+        classpath 'gradle.plugin.com.github.gregwhitaker:gradle-flatbuffers-plugin:1.0.1'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -21,3 +25,6 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
+
+apply plugin: "com.github.gregwhitaker.flatbuffers"
