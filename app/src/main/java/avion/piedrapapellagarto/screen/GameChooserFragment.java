@@ -32,14 +32,14 @@ public class GameChooserFragment extends Fragment {
         ButterKnife.bind(this, view);
     }
 
-    @OnClick(R.id.scan)
+    @OnClick(R.id.join_game)
     @SuppressWarnings(value = "unused")
     public void onScanClicked(View view) {
         Bus.post(new StartDiscoveryEvent());
     }
 
 
-    @OnClick(R.id.start_server)
+    @OnClick(R.id.new_game)
     @SuppressWarnings(value = "unused")
     public void onStartServer(View view) {
         Bus.post(new StartServerEvent());

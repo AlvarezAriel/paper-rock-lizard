@@ -1,298 +1,122 @@
 package avion.piedrapapellagarto;
 
-import android.Manifest;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothServerSocket;
-import android.bluetooth.BluetoothSocket;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.pm.PackageManager;
-import android.os.Build;
+import android.bluetooth.le.AdvertiseCallback;
+import android.bluetooth.le.AdvertiseSettings;
 import android.os.Bundle;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.Fragment;
-import android.support.v4.content.ContextCompat;
+import android.os.RemoteException;
 import android.support.v7.app.AppCompatActivity;
+import android.view.View;
+import android.widget.TextView;
 
-import org.greenrobot.eventbus.Subscribe;
-import org.parceler.Parcels;
+import org.altbeacon.beacon.Beacon;
+import org.altbeacon.beacon.BeaconConsumer;
+import org.altbeacon.beacon.BeaconManager;
+import org.altbeacon.beacon.BeaconParser;
+import org.altbeacon.beacon.BeaconTransmitter;
+import org.altbeacon.beacon.MonitorNotifier;
+import org.altbeacon.beacon.Region;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.util.UUID;
+import java.util.Collections;
 
-import avion.piedrapapellagarto.events.Bus;
-import avion.piedrapapellagarto.events.DeviceDiscoveredEvent;
-import avion.piedrapapellagarto.events.StartDiscoveryEvent;
-import avion.piedrapapellagarto.events.StartServerEvent;
-import avion.piedrapapellagarto.model.GameChoice;
-import avion.piedrapapellagarto.model.Gamer;
-import avion.piedrapapellagarto.screen.GameChooserFragment;
+import butterknife.BindView;
+import butterknife.ButterKnife;
+import butterknife.OnClick;
 import timber.log.Timber;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements BeaconConsumer {
 
-    public static final int REQUEST_ENABLE_BT = 14;
-    public static final int REQUEST_DISCOVERABLE_BT = 15;
-    public static final int REQUEST_ACCESS_COARSE_LOCATION = 16;
-    public static final UUID MY_UUID = java.util.UUID.fromString("1111-2222-3333-4444-5555");
-    private BluetoothAdapter bluetoothAdapter;
-    private boolean isBluetoothAvailable = false;
-
-    private final BroadcastReceiver discoveryReceiver = new BroadcastReceiver() {
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (BluetoothDevice.ACTION_FOUND.equals(action)) {
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                Bus.post(new DeviceDiscoveredEvent(device));
-                new ConnectThread(device).start();
-            }
-        }
-    };
-
-    private static final int DISCOVERABLE_DURATION = 300;
+    public static final String BEACON_LAYOUT = "m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25";
+    private BeaconManager beaconManager;
+    @BindView(R.id.output)
+    TextView output;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
-        Fragment gameFragment = new GameChooserFragment();
-
-        getSupportFragmentManager()
-                .beginTransaction()
-                .add(R.id.main_container, gameFragment)
-                .commit();
-
+        setContentView(R.layout.fragment_game_chooser);
+        ButterKnife.bind(this);
     }
 
-    protected void init() {
-        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        registerReceiver(discoveryReceiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
-        if (bluetoothAdapter == null) {
-            Timber.e("Bluetooth is not supported on this device");
-        } else if (!bluetoothAdapter.isEnabled()) {
-            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-        } else {
-            isBluetoothAvailable = true;
-        }
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        Timber.e("ACTIVITY RESULT: requestCode=%d resultCode=%d", requestCode, resultCode);
-
-        if (requestCode == REQUEST_ENABLE_BT && resultCode == RESULT_OK) {
-            isBluetoothAvailable = true;
-            Timber.d("Enable bluetooth: request accepted. Bluetooth enabled.");
-        } else if (requestCode == REQUEST_ENABLE_BT && resultCode == RESULT_CANCELED) {
-            Timber.e("Enable bluetooth: request canceled");
-        } else {
-            if (requestCode == REQUEST_DISCOVERABLE_BT && resultCode == DISCOVERABLE_DURATION) {
-                Timber.d("BLUETOOTH STATE: %d", bluetoothAdapter.getState());
-                new AcceptThread().start();
+    private void writeText(final String text) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                output.setText(output.getText() + "\n" + text);
             }
-        }
+        });
     }
 
-    @Subscribe
+    @OnClick(R.id.join_game)
     @SuppressWarnings(value = "unused")
-    public void scanServers(StartDiscoveryEvent event) {
-        Timber.d("Scan for servers [isBluetoothAvailable == %s]", isBluetoothAvailable);
-        askForLocationPermission();
-        if (isBluetoothAvailable) {
-            bluetoothAdapter.startDiscovery();
-        }
+    public void onScanClicked(View view) {
+        beaconManager = BeaconManager.getInstanceForApplication(this);
+        // To detect proprietary beacons, you must add a line like below corresponding to your beacon
+        // type.  Do a web search for "setBeaconLayout" to get the proper expression.
+         beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT));
+        beaconManager.bind(this);
+        writeText("Started scanning");
     }
 
-    @Subscribe
+
+    @OnClick(R.id.new_game)
     @SuppressWarnings(value = "unused")
-    public void startServer(StartServerEvent event) {
-        Timber.d("Start server [isBluetoothAvailable == %s]", isBluetoothAvailable);
-        if (isBluetoothAvailable) {
-            Intent discoverableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
-            discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, DISCOVERABLE_DURATION);
-            startActivityForResult(discoverableIntent, REQUEST_DISCOVERABLE_BT);
-        }
-    }
+    public void onStartServer(View view) {
+        Beacon beacon = new Beacon.Builder()
+                .setId1("2f234454-cf6d-4a0f-adf2-f4911ba9ffa6")
+                .setId2("1")
+                .setId3("2")
+                .setManufacturer(0x0118)
+                .setTxPower(-59)
+                .setDataFields(Collections.singletonList(0L))
+                .build();
 
-    private void askForLocationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            switch (ContextCompat.checkSelfPermission(getBaseContext(), Manifest.permission.ACCESS_COARSE_LOCATION)) {
-                case PackageManager.PERMISSION_DENIED:
-                    if (ContextCompat.checkSelfPermission(getBaseContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                        ActivityCompat.requestPermissions(MainActivity.this,
-                                new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
-                                REQUEST_ACCESS_COARSE_LOCATION);
-                    }
-                    break;
-                case PackageManager.PERMISSION_GRANTED:
-                    break;
+        BeaconParser beaconParser = new BeaconParser()
+                .setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT);
+        BeaconTransmitter beaconTransmitter = new BeaconTransmitter(getApplicationContext(), beaconParser);
+        beaconTransmitter.startAdvertising(beacon, new AdvertiseCallback() {
+
+            @Override
+            public void onStartFailure(int errorCode) {
+                writeText("Advertisement start failed with code: "+errorCode);
+
             }
-        }
-    }
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        Bus.bus().register(this);
-        init();
-    }
-
-    @Override
-    protected void onStop() {
-        Bus.bus().unregister(this);
-        super.onStop();
+            @Override
+            public void onStartSuccess(AdvertiseSettings settingsInEffect) {
+                writeText("Started advertising");
+            }
+        });
     }
 
     @Override
     protected void onDestroy() {
-        unregisterReceiver(discoveryReceiver);
         super.onDestroy();
+        beaconManager.unbind(this);
     }
 
-
-    class AcceptThread extends Thread {
-        private final BluetoothServerSocket mmServerSocket;
-
-        public AcceptThread() {
-            // Use a temporary object that is later assigned to mmServerSocket
-            // because mmServerSocket is final.
-            BluetoothServerSocket tmp = null;
-            try {
-                // MY_UUID is the app's UUID string, also used by the client code.
-                tmp = bluetoothAdapter.listenUsingRfcommWithServiceRecord("Lizard", MY_UUID);
-            } catch (IOException e) {
-                Timber.e("Socket's listen() method failed", e);
+    @Override
+    public void onBeaconServiceConnect() {
+        beaconManager.addMonitorNotifier(new MonitorNotifier() {
+            @Override
+            public void didEnterRegion(Region region) {
+                writeText("Enter region: " + region.getUniqueId());
             }
-            mmServerSocket = tmp;
-        }
 
-        public void run() {
-            BluetoothSocket socket = null;
-            // Keep listening until exception occurs or a socket is returned.
-            while (true) {
-                try {
-                    socket = mmServerSocket.accept();
-                } catch (IOException e) {
-                    Timber.e("Socket's accept() method failed", e);
-                    break;
-                }
-
-                if (socket != null) {
-                    // A connection was accepted. Perform work associated with
-                    // the connection in a separate thread.
-                    connectedToClient(socket);
-                    try {
-                        mmServerSocket.close();
-                    } catch (IOException e) {
-                        Timber.e(e);
-                    }
-                    break;
-                }
+            @Override
+            public void didExitRegion(Region region) {
+                writeText("No beacon: " + region.getUniqueId());
             }
-        }
 
-        // Closes the connect socket and causes the thread to finish.
-        public void cancel() {
-            try {
-                mmServerSocket.close();
-            } catch (IOException e) {
-                Timber.e("Could not close the connect socket", e);
+            @Override
+            public void didDetermineStateForRegion(int state, Region region) {
+                writeText("Switched state: " + (state == 1 ? "INSIDE" : "OUTSIDE"));
             }
-        }
-    }
+        });
 
-    private void connectedToClient(BluetoothSocket client) {
-        Timber.d("BLUETOOTH CONNECTION ESTABLISHED");
         try {
-            byte[] bytes = new byte[1024];
-            InputStream inputStream = client.getInputStream();
-            int len = inputStream.read(bytes);
-            String choice = new String(bytes, 0, len);
-            Timber.d("RECEIVED CHOICE: %s (len=%d)", choice, len);
-        } catch (IOException e) {
+            beaconManager.startMonitoringBeaconsInRegion(new Region("myMonitoringUniqueId", null, null, null));
+        } catch (RemoteException e) {
             Timber.e(e);
-            try {
-                client.close();
-            } catch (IOException e1) {
-                Timber.e(e);
-            }
-        }
-    }
-
-    private void connectedToServer(BluetoothSocket server) {
-        Timber.d("BLUETOOTH CONNECTION ESTABLISHED");
-        String choice = "lizard";
-        try {
-            server.getOutputStream().write(choice.getBytes());
-        } catch (IOException e) {
-            Timber.e(e);
-            try {
-                server.close();
-            } catch (IOException e1) {
-                Timber.e(e);
-            }
-        }
-    }
-
-    private class ConnectThread extends Thread {
-        private final BluetoothSocket mmSocket;
-        private final BluetoothDevice mmDevice;
-
-        public ConnectThread(BluetoothDevice device) {
-            // Use a temporary object that is later assigned to mmSocket
-            // because mmSocket is final.
-            BluetoothSocket tmp = null;
-            mmDevice = device;
-
-            try {
-                // Get a BluetoothSocket to connect with the given BluetoothDevice.
-                // MY_UUID is the app's UUID string, also used in the server code.
-                tmp = device.createRfcommSocketToServiceRecord(MY_UUID);
-            } catch (IOException e) {
-                Timber.e("Socket's create() method failed", e);
-            }
-            mmSocket = tmp;
-        }
-
-        public void run() {
-            // Cancel discovery because it otherwise slows down the connection.
-            bluetoothAdapter.cancelDiscovery();
-
-            try {
-                // Connect to the remote device through the socket. This call blocks
-                // until it succeeds or throws an exception.
-                mmSocket.connect();
-            } catch (IOException connectException) {
-                // Unable to connect; close the socket and return.
-                try {
-                    mmSocket.close();
-                } catch (IOException closeException) {
-                    Timber.e("Could not close the client socket", closeException);
-                }
-                return;
-            }
-
-            // The connection attempt succeeded. Perform work associated with
-            // the connection in a separate thread.
-            connectedToServer(mmSocket);
-        }
-
-        // Closes the client socket and causes the thread to finish.
-        public void cancel() {
-            try {
-                mmSocket.close();
-            } catch (IOException e) {
-                Timber.e("Could not close the client socket", e);
-            }
         }
     }
 }
